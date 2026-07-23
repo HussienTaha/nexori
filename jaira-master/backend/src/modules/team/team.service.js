@@ -3,6 +3,8 @@ import TeamModel from "../../models/team.model.js";
 import UserModel from "../../models/user.model.js";
 import cloudinary from "../../service/cloudinary.js";
 import { createActivity } from "../../service/activity.js";
+import { createTeamChat } from "../../service/chat.js";
+import { createNotification } from "../../service/notification.js";
 
 const removeTempFile = (filePath) => {
   if (!filePath) return;
@@ -37,12 +39,18 @@ export const createTeam = async (req, res, next) => {
       tasksId,
       chat: chatId,
     });
+    if (!chatId) {
+      const chat = await createTeamChat(team);
+      team.chat = chat._id;
+      await team.save();
+    }
     //update user's teams
     const memberUserIds = members.map((m) => m.user);
     await UserModel.updateMany(
       { _id: { $in: memberUserIds } },
       { $addToSet: { teams: team._id } },
     );
+    await createActivity({ user: ownerId, team: team._id, action: "team_created", metadata: { teamName: team.name } });
     return res.status(201).json({ message: "Team created successfully", team });
   } catch (error) {
     return next(error);
@@ -114,6 +122,7 @@ export const updateTeam = async (req, res, next) => {
     if (description !== undefined) team.description = description;
 
     await team.save();
+    await createActivity({ user: req.user._id, team: team._id, action: "team_updated", metadata: { teamName: team.name } });
     return res.status(200).json({ message: "team updated", team });
   } catch (error) {
     return next(error);
@@ -139,6 +148,7 @@ export const deleteTeam = async (req, res, next) => {
     }
 
     const memberUserIds = team.members.map((m) => m.user);
+    await createActivity({ user: req.user._id, team: team._id, action: "team_deleted", metadata: { teamName: team.name } });
     await UserModel.updateMany(
       { _id: { $in: memberUserIds } },
       { $pull: { teams: team._id } },
@@ -192,6 +202,7 @@ export const addMember = async (req, res, next) => {
     await UserModel.findByIdAndUpdate(userId, {
       $addToSet: { teams: team._id },
     });
+    if (team.chat) await (await import("../../models/chat.model.js")).default.findByIdAndUpdate(team.chat, { $addToSet: { participants: userId } });
 
     await createActivity({
       user: req.user._id,
@@ -201,6 +212,7 @@ export const addMember = async (req, res, next) => {
         teamName: team.name,
       },
     });
+    await createNotification({ user: userId, message: `You were added to team ${team.name}`, type: "team", relatedId: team._id });
 
     return res.status(200).json({ message: "member added", team });
   } catch (error) {
@@ -247,6 +259,7 @@ export const removeMember = async (req, res, next) => {
     await UserModel.findByIdAndUpdate(userId, {
       $pull: { teams: team._id },
     });
+    if (team.chat) await (await import("../../models/chat.model.js")).default.findByIdAndUpdate(team.chat, { $pull: { participants: userId } });
     await createActivity({
       user: req.user._id,
       team: team._id,
@@ -255,6 +268,7 @@ export const removeMember = async (req, res, next) => {
         teamName: team.name,
       },
     });
+    await createNotification({ user: userId, message: `You were removed from team ${team.name}`, type: "team", relatedId: team._id });
     return res.status(200).json({ message: "member removed", team });
   } catch (error) {
     return next(error);
@@ -302,6 +316,7 @@ export const changeMemberRole = async (req, res, next) => {
         role: role,
       },
     });
+    await createNotification({ user: userId, message: `Your role in ${team.name} is now ${role}`, type: "team", relatedId: team._id });
 
     return res.status(200).json({ message: "member role updated", team });
   } catch (error) {
@@ -331,6 +346,9 @@ export const leaveTeam = async (req, res, next) => {
         message: "team not found or you're not a member",
       });
     }
+
+    await UserModel.findByIdAndUpdate(userId, { $pull: { teams: team._id } });
+    if (team.chat) await (await import("../../models/chat.model.js")).default.findByIdAndUpdate(team.chat, { $pull: { participants: userId } });
 
     if (team.members.length === 0) {
       await TeamModel.deleteOne({ _id: teamId });
@@ -409,6 +427,7 @@ export const transferOwnership = async (req, res, next) => {
         newOwner: userId,
       },
     });
+    await createNotification({ user: userId, message: `You are now the owner of ${team.name}`, type: "team", relatedId: team._id });
     return res.status(200).json({ message: "ownership transferred", team });
   } catch (error) {
     return next(error);
@@ -444,6 +463,7 @@ export const uploadTeamImage = async (req, res, next) => {
       public_id: result.public_id,
     };
     await team.save();
+    await createActivity({ user: req.user._id, team: team._id, action: "team_updated", metadata: { teamName: team.name, change: "image_uploaded" } });
 
     return res.status(200).json({ message: "team image uploaded", team });
   } catch (error) {
@@ -476,6 +496,7 @@ export const changeTeamImage = async (req, res, next) => {
       public_id: result.public_id,
     };
     await team.save();
+    await createActivity({ user: req.user._id, team: team._id, action: "team_updated", metadata: { teamName: team.name, change: "image_updated" } });
     return res.status(200).json({ message: "team image updated", team });
   } catch (error) {
     removeTempFile(req.file?.path);
@@ -496,6 +517,7 @@ export const deleteTeamImage = async (req, res, next) => {
     await cloudinary.uploader.destroy(team.image.public_id);
     team.image = undefined;
     await team.save();
+    await createActivity({ user: req.user._id, team: team._id, action: "team_updated", metadata: { teamName: team.name, change: "image_deleted" } });
     return res.status(200).json({ message: "team image deleted" });
   } catch (error) {
     return next(error);

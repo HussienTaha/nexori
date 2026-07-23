@@ -8,6 +8,7 @@ import { nanoid } from "nanoid";
 import jwt from "jsonwebtoken";
 import cloudinary from "../service/cloudinary.js";
 import { emitter } from "../utlis/events/events.js";
+import { createActivity } from "../service/activity.js";
 
 const removeTempFile = (filePath) => {
   if (!filePath) return;
@@ -72,6 +73,7 @@ export const signup = async (req, res, next) => {
     });
 
     emitter.emit("sendEmail", { email, code: otp, userName: name });
+    await createActivity({ user: user._id, action: "user_signed_up", metadata: { email } });
 
     return res.status(201).json({
       message: "signup successful, check your email for verification code",
@@ -142,6 +144,7 @@ export const login = async (req, res, next) => {
     }
 
     const { access_token, refresh_token } = issueTokens(user);
+    await createActivity({ user: user._id, action: "user_logged_in", metadata: {} });
 
     return res.status(200).json({
       message: "login success",
@@ -338,6 +341,7 @@ export const updateUser = async (req, res, next) => {
     }
 
     await user.save();
+    await createActivity({ user: user._id, action: "profile_updated", metadata: {} });
 
     const updated = user.toObject();
     delete updated.password;
@@ -377,6 +381,7 @@ export const updateEmailUser = async (req, res, next) => {
       expiresAt: new Date(Date.now() + 5 * 60 * 1000),
     });
     emitter.emit("sendEmail", { email: newEmail, code: otp, userName: user.name });
+    await createActivity({ user: user._id, action: "email_changed", metadata: {} });
 
     return res.status(200).json({ message: "email updated, check new email for verification code" });
   } catch (error) {
@@ -400,6 +405,7 @@ export const changePassword = async (req, res, next) => {
 
     user.password = await hashPassword({ password: newPassword });
     await user.save();
+    await createActivity({ user: user._id, action: "password_changed", metadata: {} });
 
     return res.status(200).json({ message: "password changed" });
   } catch (error) {
@@ -417,6 +423,7 @@ export const deleteMe = async (req, res, next) => {
     user.isDeleted = true;
     user.deletedBy = req.user._id;
     await user.save();
+    await createActivity({ user: user._id, action: "user_deleted", metadata: {} });
 
     await RevokedTokenModel.create({
       tokenId: req.decoded.jti,
@@ -503,6 +510,7 @@ export const uplode_user_image = async (req, res, next) => {
       public_id: image.public_id,
     };
     await user.save();
+    await createActivity({ user: user._id, action: "profile_image_uploaded", metadata: {} });
 
     return res.status(200).json({ message: "user image uploaded", user });
   } catch (error) {
@@ -535,6 +543,7 @@ export const change_user_image = async (req, res, next) => {
       public_id: image.public_id,
     };
     await user.save();
+    await createActivity({ user: user._id, action: "profile_image_updated", metadata: {} });
     return res.status(200).json({ message: "user image updated", user });
   } catch (error) {
     removeTempFile(req.file?.path);
@@ -555,6 +564,7 @@ export const delete_user_image = async (req, res, next) => {
     await cloudinary.uploader.destroy(user.image.public_id);
     user.image = undefined;
     await user.save();
+    await createActivity({ user: user._id, action: "profile_image_deleted", metadata: {} });
     return res.status(200).json({ message: "user image deleted" });
   } catch (error) {
     return next(error);

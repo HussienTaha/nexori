@@ -4,6 +4,8 @@ import TeamModel from "../../models/team.model.js";
 import UserModel from "../../models/user.model.js";
 import cloudinary from "../../service/cloudinary.js";
 import { createActivity } from "../../service/activity.js";
+import { createTaskChat } from "../../service/chat.js";
+import { createNotifications } from "../../service/notification.js";
 
 const allowedTransitions = {
   todo: ["in_progress"],
@@ -57,7 +59,11 @@ export const Create_Task = async (req, res, next) => {
     });
 
     if (teamId) await TeamModel.findByIdAndUpdate(teamId, { $addToSet: { tasksId: task._id } });
+    const chat = await createTaskChat(task);
+    task.chat = chat._id;
+    await task.save();
     await createActivity({ team: teamId, task: task._id, user: userId, action: "task_created", metadata: { title } });
+    await createNotifications({ userIds: assignedTo, actorId: userId, message: `You were assigned to task ${title}`, type: "task", relatedId: task._id });
     return res.status(201).json({ message: "task created successfully", task });
   } catch (error) {
     return next(error);
@@ -122,6 +128,7 @@ export const update_Task = async (req, res, next) => {
     }
     await task.save();
     await createActivity({ team: task.team, task: task._id, user: userId, action: "task_updated", metadata: { oldData } });
+    if (assignedTo) await createNotifications({ userIds: assignedTo, actorId: userId, message: `You were assigned to task ${task.title}`, type: "task", relatedId: task._id });
     return res.status(200).json({ message: "task updated", task });
   } catch (error) {
     return next(error);
@@ -147,6 +154,7 @@ export const update_TaskStatus = async (req, res, next) => {
     task.status = req.body.status;
     await task.save();
     await createActivity({ team: task.team, task: task._id, user: userId, action: "status_changed", metadata: { oldStatus, newStatus: task.status } });
+    await createNotifications({ userIds: [task.createdBy, ...task.assignedTo], actorId: userId, message: `Task ${task.title} changed to ${task.status}`, type: "task", relatedId: task._id });
     return res.status(200).json({ message: "status updated", task });
   } catch (error) {
     return next(error);
@@ -188,6 +196,7 @@ export const addComment = async (req, res, next) => {
     await task.save();
     const comment = task.comments.at(-1);
     await createActivity({ team: task.team, task: task._id, user: req.user._id, action: "comment_added", metadata: { comment: comment.text } });
+    await createNotifications({ userIds: [task.createdBy, ...task.assignedTo], actorId: req.user._id, message: `New comment on task ${task.title}`, type: "task", relatedId: task._id });
     return res.status(201).json({ message: "comment added", comment });
   } catch (error) { return next(error); }
 };

@@ -1,24 +1,26 @@
 import { io } from "socket.io-client";
 
+const token =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2YTVmOTdmZmM0ZWI0ZWJkYjRkNGMyMmMiLCJlbWFpbCI6Imh1c3NpZW4xMTExMjU4QGdtYWlsLmNvbSIsInVzZXJyb2xlIjoidXNlciIsImlhdCI6MTc4NDgyOTM2MiwiZXhwIjoxODE2Mzg2OTYyLCJqdGkiOiJRRFkyVkVZTkY5SzIzMWRkakQ0U3UifQ.mntM5LG1OJM8tvtJDGim3X1RBGIsN7V7mOLpROd_Lxg";
 
-const socket = io("http://localhost:5000");
+const socketClient = io("http://localhost:3000", {
 
 
-socket.on("connect", () => {
-
-    console.log(
-        "Connected successfully:",
-        socket.id
-    );
-
+  auth: {
+    authorization: `bearer ${token}`,
+  },
 });
 
+socketClient.on("connect", () => {
+  console.log("✅ Connected:", socketClient.id);
+});
 
-socket.on("connect_error", (error)=>{
+socketClient.on("disconnect", (reason) => {
+  console.log("❌ Disconnected:", reason);
+});
 
-    console.log(
-        "Connection error:",
-        error.message
-    );
-
+socketClient.on("connect_error", (err) => {
+  console.error("❌ Connection Error");
+  console.error("Message:", err.message);
+  console.error(err);
 });

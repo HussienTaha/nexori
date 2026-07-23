@@ -18,4 +18,19 @@ export type LoginResponse = {
   message: string
   access_token: string
   refresh_token: string
+  user: {
+    _id: string
+    name: string
+    email: string
+    role: 'user' | 'admin'
+    image?: {
+      secure_url?: string
+      public_id?: string
+    }
+  }
+}
+
+export type VerifyEmailPayload = {
+  email: string
+  otp: string
 }

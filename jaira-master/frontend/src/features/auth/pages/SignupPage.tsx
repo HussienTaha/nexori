@@ -28,7 +28,9 @@ export function SignupPage() {
     setSubmitting(true)
     try {
       await authApi.signup(values)
-      navigate('/login', { replace: true })
+      navigate(`/verify-email?email=${encodeURIComponent(values.email)}`, {
+        replace: true,
+      })
     } catch (err) {
       setServerError(extractApiError(err, 'Signup failed'))
     } finally {
@@ -72,6 +74,20 @@ export function SignupPage() {
             error={errors.age?.message}
           />
         </div>
+        <label className="flex flex-col gap-1 text-sm" htmlFor="gender">
+          <span className="font-medium text-slate-700">Gender</span>
+          <select
+            id="gender"
+            className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200"
+            {...register('gender')}
+          >
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+          </select>
+          {errors.gender?.message ? (
+            <span className="text-xs text-red-600">{errors.gender.message}</span>
+          ) : null}
+        </label>
         <Input
           label="Password"
           type="password"

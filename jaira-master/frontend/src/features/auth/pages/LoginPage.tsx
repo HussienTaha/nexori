@@ -32,17 +32,10 @@ export function LoginPage() {
     setSubmitting(true)
     try {
       const res = await authApi.login(values)
-      // The backend does not return the user object on login (yet),
-      // so we store the minimum we know and let /users routes refine it later.
       authStorage.setSession({
         accessToken: res.access_token,
         refreshToken: res.refresh_token,
-        user: {
-          _id: '',
-          name: values.email.split('@')[0] ?? 'user',
-          email: values.email,
-          role: 'user',
-        },
+        user: res.user,
       })
       navigate(next, { replace: true })
     } catch (err) {

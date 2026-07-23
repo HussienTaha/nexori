@@ -52,6 +52,15 @@ const activitySchema = new mongoose.Schema(
             "team_deleted", 
             "leave",
             "role_changed"
+            ,"user_signed_up"
+            ,"user_logged_in"
+            ,"profile_updated"
+            ,"email_changed"
+            ,"password_changed"
+            ,"user_deleted"
+            ,"profile_image_uploaded"
+            ,"profile_image_updated"
+            ,"profile_image_deleted"
         
         
         ]
